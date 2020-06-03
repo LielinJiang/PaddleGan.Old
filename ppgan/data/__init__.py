@@ -73,6 +73,7 @@ class CustomDatasetDataLoader():
         self.dataset = dataset_class(opt)
         print("dataset [%s] was created" % type(self.dataset).__name__)
         place = paddle.CUDAPlace(0) #fluid.cuda_places()
+        print('num workers:', opt.num_threads)
         self.dataloader = paddle.io.DataLoader( #torch.utils.data.DataLoader(
             self.dataset,
             batch_size=opt.batch_size,

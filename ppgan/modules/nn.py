@@ -1,3 +1,5 @@
+import paddle
+
 from paddle.fluid.dygraph import Layer
 from paddle import fluid
 
@@ -35,4 +37,24 @@ class Dropout(Layer):
         self.mode = mode
 
     def forward(self, x):
-        return fluid.layers.dropout(x, self.prob, downgrade_in_infer=self.mode)
+        return fluid.layers.dropout(x, self.prob, dropout_implementation=self.mode)
+
+
+class BCEWithLogitsLoss(fluid.dygraph.Layer):
+    def __init__(self, weight=None, reduction='mean'):
+        if reduction not in ['sum', 'mean', 'none']:
+            raise ValueError(
+                "The value of 'reduction' in bce_loss should be 'sum', 'mean' or 'none', but "
+                "received %s, which is not allowed." % reduction)
+
+        super(BCEWithLogitsLoss, self).__init__()
+        # self.weight = weight
+        # self.reduction = reduction
+        self.bce_loss = paddle.nn.BCELoss(weight, reduction)
+
+    def forward(self, input, label):
+        input = paddle.nn.functional.sigmoid(input, True)
+        return self.bce_loss(input, label)
+
+
+        

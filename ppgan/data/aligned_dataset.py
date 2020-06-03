@@ -1,3 +1,4 @@
+import cv2
 import os.path
 from .base_dataset import BaseDataset, get_params, get_transform
 from .image_folder import make_dataset
@@ -38,22 +39,34 @@ class AlignedDataset(BaseDataset):
         """
         # read a image given a random integer index
         AB_path = self.AB_paths[index]
-        AB = Image.open(AB_path).convert('RGB')
+        # AB = Image.open(AB_path).convert('RGB')
+        AB = cv2.imread(AB_path)
+        # B_img = cv2.imread(B_path)
         # split AB image into A and B
-        w, h = AB.size
+        h, w = AB.shape[:2]
+        # w, h = AB.size
         w2 = int(w / 2)
-        A = AB.crop((0, 0, w2, h))
-        B = AB.crop((w2, 0, w, h))
+        # print('type before:', type(AB))
+        A = AB[:h, :w2, :]
+        B = AB[:h, w2:, :]
+        # A = AB.crop((0, 0, w2, h))
+        # B = AB.crop((w2, 0, w, h))
+        # print('type after:', type(A), type(B), B.SHAPE)
 
         # apply the same transform to both A and B
-        transform_params = get_params(self.opt, A.size)
+        # transform_params = get_params(self.opt, A.size)
+        transform_params = get_params(self.opt, (w2, h))
+        # cv2.resize(A, ())
+        # a = cv2.resize(B, (286, 286), interpolation=2)
+        # print('resize A:', a.shape, type(a), a.dtype)
+
         A_transform = get_transform(self.opt, transform_params, grayscale=(self.input_nc == 1))
         B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
 
         A = A_transform(A)
         B = B_transform(B)
 
-        return {'A': A, 'B': B, 'A_paths': AB_path, 'B_paths': AB_path}
+        return A, B #{'A': A, 'B': B, 'A_paths': AB_path, 'B_paths': AB_path}
 
     def __len__(self):
         """Return the total number of images in the dataset."""

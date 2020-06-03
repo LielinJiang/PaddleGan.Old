@@ -4,7 +4,7 @@ import paddle.nn as nn
 import functools
 import numpy as np
 # from paddle.optim import lr_scheduler
-from ..modules.nn import ReflectionPad2d, LeakyReLU, Tanh, Dropout
+from ..modules.nn import ReflectionPad2d, LeakyReLU, Tanh, Dropout, BCEWithLogitsLoss
 
 
 ###############################################################################
@@ -239,7 +239,7 @@ class GANLoss(paddle.fluid.dygraph.Layer):
         if gan_mode == 'lsgan':
             self.loss = nn.MSELoss()
         elif gan_mode == 'vanilla':
-            self.loss = nn.BCELoss()#nn.BCEWithLogitsLoss()
+            self.loss = BCEWithLogitsLoss()#nn.BCEWithLogitsLoss()
         elif gan_mode in ['wgangp']:
             self.loss = None
         else:
@@ -516,7 +516,7 @@ class UnetSkipConnectionBlock(paddle.fluid.dygraph.Layer):
                                         filter_size=4, stride=2,
                                         padding=1)
             down = [downconv]
-            up = [uprelu, upconv, nn.Tanh()]
+            up = [uprelu, upconv, Tanh()]
             model = down + [submodule] + up
         elif innermost:
             upconv = nn.Conv2DTranspose(inner_nc, outer_nc,

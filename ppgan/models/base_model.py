@@ -125,6 +125,13 @@ class BaseModel(ABC):
         lr = self.optimizers[0].current_step_lr()#param_groups[0]['lr']
         print('learning rate = %.7f' % lr)
 
+    def build_lr_scheduler(self, base_lr, step_per_epoch):
+        bounds = [100, 120, 140, 160, 180]
+        gamma = [1., 0.8, 0.6, 0.4, 0.2, 0.1]
+        bounds = [i * step_per_epoch for i in bounds]
+        lr = [i * base_lr for i in gamma]
+        return paddle.fluid.layers.piecewise_decay(boundaries=bounds, values=lr)
+
     def get_current_visuals(self):
         """Return visualization images. train.py will display these images with visdom, and save the images to a HTML"""
         visual_ret = OrderedDict()
@@ -149,7 +156,7 @@ class BaseModel(ABC):
         """
         for name in self.model_names:
             if isinstance(name, str):
-                save_filename = '%s_net_%s.pth' % (epoch, name)
+                save_filename = '%s_net_%s' % (epoch, name)
                 save_path = os.path.join(self.save_dir, save_filename)
                 net = getattr(self, 'net' + name)
 
@@ -182,7 +189,7 @@ class BaseModel(ABC):
         """
         for name in self.model_names:
             if isinstance(name, str):
-                load_filename = '%s_net_%s.pth' % (epoch, name)
+                load_filename = '%s_net_%s' % (epoch, name)
                 load_path = os.path.join(self.save_dir, load_filename)
                 net = getattr(self, 'net' + name)
                 # if isinstance(net, torch.nn.DataParallel):
@@ -197,7 +204,7 @@ class BaseModel(ABC):
                 # patch InstanceNorm checkpoints prior to 0.4
                 for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
                     self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
-                net.load_state_dict(state_dict)
+                net.set_dict(state_dict)
 
     def print_networks(self, verbose):
         """Print the total number of parameters in the network and (if verbose) network architecture

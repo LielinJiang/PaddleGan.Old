@@ -1,3 +1,5 @@
+import paddle
+
 from .base_model import BaseModel
 from . import networks
 
@@ -57,8 +59,9 @@ class TestModel(BaseModel):
 
         We need to use 'single_dataset' dataset mode. It only load images from one domain.
         """
-        self.real = input['A'].to(self.device)
-        self.image_paths = input['A_paths']
+        # self.real = input['A'].to(self.device)
+        self.real = paddle.imperative.to_variable(input[0])
+        self.image_paths = input[1]
 
     def forward(self):
         """Run forward pass."""

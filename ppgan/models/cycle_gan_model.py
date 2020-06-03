@@ -94,8 +94,12 @@ class CycleGANModel(BaseModel):
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             # self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             # self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_G = paddle.optimizer.Adam(learning_rate=opt.lr, parameter_list=self.netG_A.parameters() + self.netG_B.parameters(), beta1=opt.beta1)  #torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_D = paddle.optimizer.Adam(learning_rate=opt.lr, parameter_list=self.netD_A.parameters() + self.netD_B.parameters(), beta1=opt.beta1) #torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            # FIXME: step_per_epoch
+            lr_scheduler_g = self.build_lr_scheduler(opt.lr, step_per_epoch=2975)
+            lr_scheduler_d = self.build_lr_scheduler(opt.lr, step_per_epoch=2975)
+            # lr_scheduler = self.build_lr_scheduler()
+            self.optimizer_G = paddle.optimizer.Adam(learning_rate=lr_scheduler_g, parameter_list=self.netG_A.parameters() + self.netG_B.parameters(), beta1=opt.beta1)  #torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_D = paddle.optimizer.Adam(learning_rate=lr_scheduler_d, parameter_list=self.netD_A.parameters() + self.netD_B.parameters(), beta1=opt.beta1) #torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 

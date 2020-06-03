@@ -1,3 +1,4 @@
+import cv2
 import os.path
 from .base_dataset import BaseDataset, get_transform
 from .image_folder import make_dataset
@@ -60,11 +61,15 @@ class UnalignedDataset(BaseDataset):
         else:   # randomize the index for domain B to avoid fixed pairs.
             index_B = random.randint(0, self.B_size - 1)
         B_path = self.B_paths[index_B]
-        A_img = Image.open(A_path).convert('RGB')
-        B_img = Image.open(B_path).convert('RGB')
+        # A_img = Image.open(A_path).convert('RGB')
+        # B_img = Image.open(B_path).convert('RGB')
+        A_img = cv2.imread(A_path)
+        B_img = cv2.imread(B_path)
         # apply image transformation
-        A = self.transform_A(np.array(A_img, dtype='float32'))
-        B = self.transform_B(np.array(B_img, dtype='float32'))
+        # A = self.transform_A(np.array(A_img, dtype='float32'))
+        # B = self.transform_B(np.array(B_img, dtype='float32'))
+        A = self.transform_A(A_img)
+        B = self.transform_B(B_img)
 
         # return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
         return A, B

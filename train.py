@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
             iter_data_time = time.time()
 
-        dataset.dataset.reset_paths()
+        # dataset.dataset.reset_paths()
 
         if epoch % opt.save_epoch_freq == 0:              # cache our model every <save_epoch_freq> epochs
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))

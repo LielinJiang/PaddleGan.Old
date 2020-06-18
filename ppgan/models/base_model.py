@@ -3,20 +3,7 @@ import paddle
 import numpy as np
 from collections import OrderedDict
 from abc import ABC, abstractmethod
-# from . import networks
 
-class LinearDecay(paddle.fluid.dygraph.learning_rate_scheduler.LearningRateDecay):
-    def __init__(self, learning_rate, step_per_epoch, nepochs, nepochs_decay):
-        super(LinearDecay, self).__init__()
-        self.learning_rate = learning_rate
-        self.nepochs = nepochs
-        self.nepochs_decay = nepochs_decay
-        self.step_per_epoch = step_per_epoch
-
-    def step(self):
-        cur_epoch = np.floor(self.step_num / self.step_per_epoch)
-        lr_l = 1.0 - max(0, cur_epoch + 1 - self.nepochs) / float(self.nepochs_decay + 1)
-        return self.create_lr_var(lr_l * self.learning_rate)
 
 
 class BaseModel(ABC):
@@ -44,13 +31,9 @@ class BaseModel(ABC):
             -- self.optimizers (optimizer list):    define and initialize optimizers. You can define one optimizer for each network. If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
         """
         self.opt = opt
-        # self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
-        # self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')  # get device name: CPU or GPU
         self.save_dir = os.path.join(opt.output_dir, opt.model.name)  # save all the checkpoints to save_dir
-        # if opt.preprocess != 'scale_width':  # with [scale_width], input images might have different sizes, which hurts the performance of cudnn.benchmark.
-        #     # torch.backends.cudnn.benchmark = True
-        #     pass
+       
         self.loss_names = []
         self.model_names = []
         self.visual_names = []
@@ -91,18 +74,6 @@ class BaseModel(ABC):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         pass
 
-    # def setup(self, opt):
-    #     """Load and print networks; create schedulers
-
-    #     Parameters:
-    #         opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
-    #     """
-    #     if self.isTrain:
-    #         self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
-    #     if not self.isTrain or opt.continue_train:
-    #         load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
-    #         self.load_networks(load_suffix)
-    #     self.print_networks(opt.verbose)
 
     def eval(self):
         """Make models eval mode during test time"""
@@ -129,15 +100,6 @@ class BaseModel(ABC):
         """ Return image paths that are used to load current data"""
         return self.image_paths
 
-    def build_lr_scheduler(self, base_lr, step_per_epoch):
-        return LinearDecay(self.opt.lr, self.opt.step_per_epoch, 
-                           self.opt.nepochs, self.opt.decay_epochs)
-        # bounds = [100, 120, 140, 160, 180]
-        # gamma = [1., 0.8, 0.6, 0.4, 0.2, 0.1]
-        # bounds = [i * step_per_epoch for i in bounds]
-        # lr = [i * base_lr for i in gamma]
-        # return paddle.fluid.layers.piecewise_decay(boundaries=bounds, values=lr)
-
     def get_current_visuals(self):
         """Return visualization images. train.py will display these images with visdom, and save the images to a HTML"""
         visual_ret = OrderedDict()
@@ -154,19 +116,6 @@ class BaseModel(ABC):
                 errors_ret[name] = float(getattr(self, 'loss_' + name))  # float(...) works for both scalar tensor and float number
         return errors_ret
 
-    # def __patch_instance_norm_state_dict(self, state_dict, module, keys, i=0):
-    #     """Fix InstanceNorm checkpoints incompatibility (prior to 0.4)"""
-    #     key = keys[i]
-    #     if i + 1 == len(keys):  # at the end, pointing to a parameter/buffer
-    #         if module.__class__.__name__.startswith('InstanceNorm') and \
-    #                 (key == 'running_mean' or key == 'running_var'):
-    #             if getattr(module, key) is None:
-    #                 state_dict.pop('.'.join(keys))
-    #         if module.__class__.__name__.startswith('InstanceNorm') and \
-    #            (key == 'num_batches_tracked'):
-    #             state_dict.pop('.'.join(keys))
-    #     else:
-    #         self.__patch_instance_norm_state_dict(state_dict, getattr(module, key), keys, i + 1)
 
     def print_networks(self, verbose):
         """Print the total number of parameters in the network and (if verbose) network architecture
@@ -179,9 +128,9 @@ class BaseModel(ABC):
             if isinstance(name, str):
                 net = getattr(self, 'net' + name)
                 num_params = 0
-                # for param in net.parameters():
-                #     # num_params += param.numel()
-                #     num_params += param.sizes()
+                for param in net.parameters():
+                    # num_params += param.numel()
+                    num_params += np.prod(param.shape)
                 if verbose:
                     print(net)
                 print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))

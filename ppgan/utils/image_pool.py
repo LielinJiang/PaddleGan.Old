@@ -45,7 +45,9 @@ class ImagePool():
                 p = random.uniform(0, 1)
                 if p > 0.5:  # by 50% chance, the buffer will return a previously stored image, and insert the current image into the buffer
                     random_id = random.randint(0, self.pool_size - 1)  # randint is inclusive
-                    tmp = self.images[random_id]#.clone()
+                    # FIXME: clone
+                    # tmp = (self.images[random_id]).detach() #.clone()
+                    tmp = self.images[random_id] #.clone()
                     self.images[random_id] = image
                     return_images.append(tmp)
                 else:       # by another 50% chance, the buffer will return the current image

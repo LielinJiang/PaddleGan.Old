@@ -4,11 +4,11 @@ It also includes common transformation functions (e.g., get_transform, __scale_w
 """
 import random
 import numpy as np
-# import torch.utils.data as data
+
 from paddle.io import Dataset
 from PIL import Image
 import cv2
-# import torchvision.transforms as transforms
+
 import paddle.incubate.hapi.vision.transforms as transforms
 from .transforms import transforms as T
 from abc import ABC, abstractmethod
@@ -24,14 +24,14 @@ class BaseDataset(Dataset, ABC):
     -- <modify_commandline_options>:    (optionally) add dataset-specific options and set default options.
     """
 
-    def __init__(self, opt):
+    def __init__(self, cfg):
         """Initialize the class; save the options in the class
 
         Parameters:
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
-        self.opt = opt
-        self.root = opt.dataroot
+        self.cfg = cfg
+        self.root = cfg.dataroot
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -64,66 +64,59 @@ class BaseDataset(Dataset, ABC):
         pass
 
 
-def get_params(opt, size):
+def get_params(cfg, size):
     w, h = size
     new_h = h
     new_w = w
-    if opt.preprocess == 'resize_and_crop':
-        new_h = new_w = opt.load_size
-    elif opt.preprocess == 'scale_width_and_crop':
-        new_w = opt.load_size
-        new_h = opt.load_size * h // w
+    if cfg.preprocess == 'resize_and_crop':
+        new_h = new_w = cfg.load_size
+    elif cfg.preprocess == 'scale_width_and_crop':
+        new_w = cfg.load_size
+        new_h = cfg.load_size * h // w
 
-    x = random.randint(0, np.maximum(0, new_w - opt.crop_size))
-    y = random.randint(0, np.maximum(0, new_h - opt.crop_size))
+    x = random.randint(0, np.maximum(0, new_w - cfg.crop_size))
+    y = random.randint(0, np.maximum(0, new_h - cfg.crop_size))
 
     flip = random.random() > 0.5
 
     return {'crop_pos': (x, y), 'flip': flip}
 
 
-def get_transform(opt, params=None, grayscale=False, method=cv2.INTER_CUBIC, convert=True):
+def get_transform(cfg, params=None, grayscale=False, method=cv2.INTER_CUBIC, convert=True):
     transform_list = []
     if grayscale:
         print('grayscale not support for now!!!')
         # transform_list.append(transforms.Grayscale(1))
-    if 'resize' in opt.preprocess:
-        osize = (opt.load_size, opt.load_size)
+    if 'resize' in cfg.preprocess:
+        osize = (cfg.load_size, cfg.load_size)
         # print('os size:', osize)
         transform_list.append(transforms.Resize(osize, method))
-    elif 'scale_width' in opt.preprocess:
+    elif 'scale_width' in cfg.preprocess:
         print('scale_width not support for now!!!')
-        # transform_list.append(transforms.Lambda(lambda img: __scale_width(img, opt.load_size, opt.crop_size, method)))
+        # transform_list.append(transforms.Lambda(lambda img: __scale_width(img, cfg.load_size, cfg.crop_size, method)))
 
-    if 'crop' in opt.preprocess:
-        # print('crop not support for now!!!', opt.crop_size)
-        transform_list.append(T.RandomCrop(opt.crop_size))
+    if 'crop' in cfg.preprocess:
+        # print('crop not support for now!!!', cfg.crop_size)
+        transform_list.append(T.RandomCrop(cfg.crop_size))
         # if params is None:
         #     transform_list.append(transforms.RandomCrop(opt.crop_size))
         # else:
         #     print('crop not support for now!!!')
             # transform_list.append(transforms.Lambda(lambda img: __crop(img, params['crop_pos'], opt.crop_size)))
 
-    if opt.preprocess == 'none':
+    if cfg.preprocess == 'none':
         print('preprocess not support for now!!!')
         # transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base=4, method=method)))
 
-    if not opt.no_flip:
+    if not cfg.no_flip:
         if params is None:
             transform_list.append(transforms.RandomHorizontalFlip())
         elif params['flip']:
-            # print('flip not support for now!!!')
             transform_list.append(transforms.RandomHorizontalFlip(1.0))
-            # transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
     
     if convert:
         transform_list += [transforms.Permute(to_rgb=True)]
         transform_list += [transforms.Normalize((127.5, 127.5, 127.5), (127.5, 127.5, 127.5))]
-        # transform_list += [transforms.ToTensor()]
-        # if grayscale:
-        #     transform_list += [transforms.Normalize((0.5,), (0.5,))]
-        # else:
-        #     transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     return transforms.Compose(transform_list)
 
 

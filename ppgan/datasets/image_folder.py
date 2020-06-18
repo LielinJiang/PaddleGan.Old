@@ -4,7 +4,6 @@ We modify the official PyTorch image folder (https://github.com/pytorch/vision/b
 so that this class can load images from both current directory and its subdirectories.
 """
 
-# import torch.utils.data as data
 from paddle.io import Dataset
 from PIL import Image
 import os
@@ -30,7 +29,8 @@ def make_dataset(dir, max_dataset_size=float("inf")):
             if is_image_file(fname):
                 path = os.path.join(root, fname)
                 images.append(path)
-    return images[:min(max_dataset_size, len(images))]
+    # print('inf', float(max_dataset_size), len(images), min(float(max_dataset_size), len(images)))
+    return images[:min(float(max_dataset_size), len(images))]
 
 
 def default_loader(path):

@@ -1,11 +1,16 @@
-# import torch
 import paddle
-import itertools
-from ..utils.image_pool import ImagePool
 from .base_model import BaseModel
-from . import networks
+
+from .builder import MODELS
+from .generators.builder import build_generator
+from .discriminators.builder import build_discriminator
+from .losses import GANLoss
+# from ..modules.nn import L1Loss
+from ..solver import build_optimizer
+from ..utils.image_pool import ImagePool
 
 
+@MODELS.register()
 class CycleGANModel(BaseModel):
     """
     This class implements the CycleGAN model, for learning image-to-image translation without paired data.
@@ -17,33 +22,6 @@ class CycleGANModel(BaseModel):
 
     CycleGAN paper: https://arxiv.org/pdf/1703.10593.pdf
     """
-    @staticmethod
-    def modify_commandline_options(parser, is_train=True):
-        """Add new dataset-specific options, and rewrite default values for existing options.
-
-        Parameters:
-            parser          -- original option parser
-            is_train (bool) -- whether training phase or test phase. You can use this flag to add training-specific or test-specific options.
-
-        Returns:
-            the modified parser.
-
-        For CycleGAN, in addition to GAN losses, we introduce lambda_A, lambda_B, and lambda_identity for the following losses.
-        A (source domain), B (target domain).
-        Generators: G_A: A -> B; G_B: B -> A.
-        Discriminators: D_A: G_A(A) vs. B; D_B: G_B(B) vs. A.
-        Forward cycle loss:  lambda_A * ||G_B(G_A(A)) - A|| (Eqn. (2) in the paper)
-        Backward cycle loss: lambda_B * ||G_A(G_B(B)) - B|| (Eqn. (2) in the paper)
-        Identity loss (optional): lambda_identity * (||G_A(B) - B|| * lambda_B + ||G_B(A) - A|| * lambda_A) (Sec 5.2 "Photo generation from paintings" in the paper)
-        Dropout is not used in the original CycleGAN paper.
-        """
-        parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
-        if is_train:
-            parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
-            parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
-
-        return parser
 
     def __init__(self, opt):
         """Initialize the CycleGAN class.
@@ -71,37 +49,32 @@ class CycleGANModel(BaseModel):
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
         # Code (vs. paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
-        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
-                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
-                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netG_A = build_generator(opt.model.generator)
+        self.netG_B = build_generator(opt.model.generator)
 
         if self.isTrain:  # define discriminators
-            self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
-            self.netD_B = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+            self.netD_A = build_discriminator(opt.model.discriminator)
+            self.netD_B = build_discriminator(opt.model.discriminator)
 
         if self.isTrain:
             if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
-                assert(opt.input_nc == opt.output_nc)
-            self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
-            self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
+                assert(opt.dataset.train.input_nc == opt.dataset.train.output_nc)
+            self.fake_A_pool = ImagePool(opt.dataset.train.pool_size)  # create image buffer to store previously generated images
+            self.fake_B_pool = ImagePool(opt.dataset.train.pool_size)  # create image buffer to store previously generated images
             # define loss functions
-            self.criterionGAN = networks.GANLoss(opt.gan_mode, [[[[1.0]]]], [[[[0.0]]]])#.to(self.device)  # define GAN loss.
-            self.criterionCycle = paddle.nn.L1Loss() #torch.nn.L1Loss()
+            self.criterionGAN = GANLoss(opt.model.gan_mode, [[[[1.0]]]], [[[[0.0]]]])#.to(self.device)  # define GAN loss.
+            self.criterionCycle = paddle.nn.L1Loss() 
             self.criterionIdt = paddle.nn.L1Loss()
-            # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            # self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            # self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            # FIXME: step_per_epoch
-            lr_scheduler_g = self.build_lr_scheduler(opt.lr, step_per_epoch=2975)
-            lr_scheduler_d = self.build_lr_scheduler(opt.lr, step_per_epoch=2975)
-            # lr_scheduler = self.build_lr_scheduler()
-            self.optimizer_G = paddle.optimizer.Adam(learning_rate=lr_scheduler_g, parameter_list=self.netG_A.parameters() + self.netG_B.parameters(), beta1=opt.beta1)  #torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_D = paddle.optimizer.Adam(learning_rate=lr_scheduler_d, parameter_list=self.netD_A.parameters() + self.netD_B.parameters(), beta1=opt.beta1) #torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            
+            self.optimizer_G =  build_optimizer(opt.optimizer, parameter_list=self.netG_A.parameters() + self.netG_B.parameters())
+            # self.optimizer_D = paddle.optimizer.Adam(learning_rate=lr_scheduler_d, parameter_list=self.netD_A.parameters() + self.netD_B.parameters(), beta1=opt.beta1) 
+            self.optimizer_DA = build_optimizer(opt.optimizer, parameter_list=self.netD_A.parameters()) 
+            self.optimizer_DB = build_optimizer(opt.optimizer, parameter_list=self.netD_B.parameters()) 
             self.optimizers.append(self.optimizer_G)
-            self.optimizers.append(self.optimizer_D)
+            # self.optimizers.append(self.optimizer_D)
+            self.optimizers.append(self.optimizer_DA)
+            self.optimizers.append(self.optimizer_DB)
+            self.optimizer_names.extend(['optimizer_G', 'optimizer_DA', 'optimizer_DB'])
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -111,11 +84,8 @@ class CycleGANModel(BaseModel):
 
         The option 'direction' can be used to swap domain A and domain B.
         """
-        # AtoB = self.opt.direction == 'AtoB'
-        # self.real_A = input['A' if AtoB else 'B'].to(self.device)
-        # self.real_B = input['B' if AtoB else 'A'].to(self.device)
-        # self.image_paths = input['A_paths' if AtoB else 'B_paths']
-        AtoB = self.opt.direction == 'AtoB'
+        AtoB = self.opt.dataset.train.direction == 'AtoB'
+        
         self.real_A = paddle.imperative.to_variable(input[0] if AtoB else input[1])
         self.real_B = paddle.imperative.to_variable(input[1] if AtoB else input[0])
 
@@ -125,6 +95,21 @@ class CycleGANModel(BaseModel):
         self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
         self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
+
+
+    def forward_test(self, input):
+        input = paddle.imperative.to_variable(input)
+        net_g = getattr(self, 'netG_' + self.opt.dataset.test.direction[0])
+        return net_g(input)
+
+    def test(self, input):
+        """Forward function used in test time.
+
+        This function wraps <forward> function in no_grad() so we don't save intermediate steps for backprop
+        It also calls <compute_visuals> to produce additional visualization results
+        """
+        with paddle.imperative.no_grad():
+            return self.forward_test(input)
 
     def backward_D_basic(self, netD, real, fake):
         """Calculate GAN loss for the discriminator
@@ -193,12 +178,21 @@ class CycleGANModel(BaseModel):
         self.forward()      # compute fake images and reconstruction images.
         # G_A and G_B
         self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
-        self.optimizer_G.clear_gradients() #zero_grad()  # set G_A and G_B's gradients to zero
+        # self.optimizer_G.clear_gradients() #zero_grad()  # set G_A and G_B's gradients to zero
         self.backward_G()             # calculate gradients for G_A and G_B
         self.optimizer_G.minimize(self.loss_G) #step()       # update G_A and G_B's weights
+        self.optimizer_G.clear_gradients()
+        # self.optimizer_G.clear_gradients()
         # D_A and D_B
-        self.set_requires_grad([self.netD_A, self.netD_B], True)
-        self.optimizer_D.clear_gradients() #zero_grad()   # set D_A and D_B's gradients to zero
+        # self.set_requires_grad([self.netD_A, self.netD_B], True)
+        self.set_requires_grad(self.netD_A, True)
+        # self.optimizer_D.clear_gradients() #zero_grad()   # set D_A and D_B's gradients to zero
         self.backward_D_A()      # calculate gradients for D_A
+        self.optimizer_DA.minimize(self.loss_D_A) #step()  # update D_A and D_B's weights
+        self.optimizer_DA.clear_gradients() #zero_g
+        self.set_requires_grad(self.netD_B, True)
+        # self.optimizer_DB.clear_gradients() #zero_grad()   # set D_A and D_B's gradients to zero
+
         self.backward_D_B()      # calculate graidents for D_B
-        self.optimizer_D.minimize(self.loss_D_A + self.loss_D_B) #step()  # update D_A and D_B's weights
+        self.optimizer_DB.minimize(self.loss_D_B) #step()  # update D_A and D_B's weights
+        self.optimizer_DB.clear_gradients() #zero_grad()   # set D_A and D_B's gradients to zero

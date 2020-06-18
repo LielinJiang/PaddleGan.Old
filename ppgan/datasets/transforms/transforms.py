@@ -55,6 +55,6 @@ class RandomCrop(object):
         return i, j, th, tw
 
     def __call__(self, img):
-        x, y, w, h = self._get_params(img)
+        x, y, h, w = self._get_params(img)
         cropped_img = img[y:y + h, x:x + w]
         return cropped_img

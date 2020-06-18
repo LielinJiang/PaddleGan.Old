@@ -1,25 +1,28 @@
 import cv2
+import paddle
 from .base_dataset import BaseDataset, get_transform
 from .image_folder import make_dataset
-from PIL import Image
+
+from .builder import DATASETS
 
 
+@DATASETS.register()
 class SingleDataset(BaseDataset):
     """This dataset class can load a set of images specified by the path --dataroot /path/to/data.
 
     It can be used for generating CycleGAN results only for one side with the model option '-model test'.
     """
 
-    def __init__(self, opt):
+    def __init__(self, cfg):
         """Initialize this dataset class.
 
         Parameters:
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
-        BaseDataset.__init__(self, opt)
-        self.A_paths = sorted(make_dataset(opt.dataroot, opt.max_dataset_size))
-        input_nc = self.opt.output_nc if self.opt.direction == 'BtoA' else self.opt.input_nc
-        self.transform = get_transform(opt, grayscale=(input_nc == 1))
+        BaseDataset.__init__(self, cfg)
+        self.A_paths = sorted(make_dataset(cfg.dataroot, cfg.max_dataset_size))
+        input_nc = self.cfg.output_nc if self.cfg.direction == 'BtoA' else self.cfg.input_nc
+        self.transform = get_transform(cfg.transform, grayscale=(input_nc == 1))
 
     def __getitem__(self, index):
         """Return a data point and its metadata information.
@@ -40,3 +43,11 @@ class SingleDataset(BaseDataset):
     def __len__(self):
         """Return the total number of images in the dataset."""
         return len(self.A_paths)
+
+    def get_path_by_indexs(self, indexs):
+        if isinstance(indexs, paddle.Variable):
+            indexs = indexs.numpy()
+        current_paths = []
+        for index in indexs:
+            current_paths.append(self.A_paths[index])
+        return current_paths

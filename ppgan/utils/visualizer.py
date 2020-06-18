@@ -22,7 +22,9 @@ def tensor2im(input_image, imtype=np.uint8):
         imtype (type)        --  the desired type of the converted numpy array
     """
     if not isinstance(input_image, np.ndarray):
-        image_numpy = input_image.numpy()[0]  # convert it into a numpy array
+        image_numpy = input_image.numpy()  # convert it into a numpy array
+        if len(image_numpy.shape) == 4:
+            image_numpy = image_numpy[0]
         if image_numpy.shape[0] == 1:  # grayscale to RGB
             image_numpy = np.tile(image_numpy, (3, 1, 1))
         image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0  # post-processing: tranpose and scaling
